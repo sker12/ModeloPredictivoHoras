@@ -391,7 +391,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
 # --- 9. CONFIGURACIÓN PARA PRODUCCIÓN EN DOKPLOY ---
 if __name__ == "__main__":
     # Configuración específica para producción
-    server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
+    server_name = os.getenv("GRADIO_SERVER_NAME", "paginaweb-modelopredictivo-dlyi5o-c14057-31-59-40-250.traefik.me")
     server_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
     
     print(f"🚀 Iniciando aplicación en {server_name}:{server_port}")
