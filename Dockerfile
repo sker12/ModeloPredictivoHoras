@@ -13,7 +13,7 @@ COPY requirements.txt .
 
 # Instalar dependencias Python
 RUN pip install --no-cache-dir -r requirements.txt
-
+RUN pip install --upgrade gradio
 # Copiar el código de la aplicación
 COPY . .
 
@@ -24,7 +24,7 @@ RUN mkdir -p /tmp/gradio
 EXPOSE 7860
 
 # Configurar variables de entorno para Gradio
-ENV GRADIO_SERVER_NAME=0.0.0.0
+ENV GRADIO_SERVER_NAME=paginaweb-modelopredictivo-dlyi5o-c14057-31-59-40-250.traefik.me
 ENV GRADIO_SERVER_PORT=7860
 
 # Comando para ejecutar la aplicación
