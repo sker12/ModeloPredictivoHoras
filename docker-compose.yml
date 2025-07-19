@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  prediccion-horas:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: prediccion-horas-app
+    
+    # Variables de entorno
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      # Agregar tokens como variables de entorno o usar archivo .env
+      - HF_TOKEN=${HF_TOKEN}
+      - HF_WRITE_TOKEN=${HF_WRITE_TOKEN}
+    
+    # Mapeo de puertos
+    ports:
+      - "7860:7860"
+      - "8080:8080"  # Para health check
+    
+    # Recursos
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "/app/health_check.py", "localhost", "7860"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Reinicio automático
+    restart: unless-stopped
+    
+    # Volúmenes para logs y cache
+    volumes:
+      - app-logs:/app/logs
+      - app-cache:/tmp/gradio
+    
+    # Configuración de red
+    networks:
+      - prediccion-network
+
+  # Servicio opcional de monitoreo
+  monitoring:
+    image: nginx:alpine
+    container_name: prediccion-monitoring
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - prediccion-horas
+    networks:
+      - prediccion-network
+    restart: unless-stopped
+
+volumes:
+  app-logs:
+    driver: local
+  app-cache:
+    driver: local
+
+networks:
+  prediccion-network:
+    driver: bridge
+
+---
+# Archivo .env de ejemplo (crear por separado)
+# HF_TOKEN=tu_token_de_lectura_aqui
+# HF_WRITE_TOKEN=tu_token_de_escritura_aqui
+
+---
+# nginx.conf de ejemplo para load balancing/proxy
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream prediccion_app {
+        server prediccion-horas:7860;
+    }
+    
+    server {
+        listen 80;
+        server_name _;
+        
+        location / {
+            proxy_pass http://prediccion_app;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # WebSocket support for Gradio
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            
+            # Timeouts
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        }
+        
+        # Health check endpoint
+        location /health {
+            proxy_pass http://prediccion-horas:8080/health;
+        }
+    }
+}

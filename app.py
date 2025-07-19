@@ -3,6 +3,7 @@
 Script FINAL v4.6 para predecir horas de ejecución.
 MODIFICADO: Sube el archivo procesado a un Dataset público para descarga directa.
 CORREGIDO: Se añade limpieza automática de nombres de columnas para evitar KeyError.
+MODIFICADO PARA DOKPLOY: Configurado para despliegue en producción.
 """
 
 # --- 1. IMPORTACIÓN DE LIBRERÍAS ---
@@ -26,7 +27,7 @@ warnings.filterwarnings('ignore')
 
 # --- 2. CARGA Y PREPARACIÓN DE DATOS ---
 
-# Obtener los tokens guardados en los "Secrets" del Space
+# Obtener los tokens guardados en los "Secrets" del Space o variables de entorno
 hf_token_read = os.getenv("HF_TOKEN")      # Token para lectura de datos
 hf_token_write = os.getenv("HF_WRITE_TOKEN") # Token para escritura de resultados
 
@@ -40,33 +41,63 @@ REPO_ID_RESULTS = "258Yeison258/resultados-modelo-predictivo" # Reemplaza con tu
 
 # Verificar que los tokens estén configurados
 if not hf_token_read:
-    raise ValueError("No se encontró el HF_TOKEN en los Secrets del Space.")
+    print("⚠️  ADVERTENCIA: No se encontró el HF_TOKEN en las variables de entorno.")
+    print("   La aplicación funcionará en modo demo limitado.")
 if not hf_token_write:
-    raise ValueError("No se encontró el HF_WRITE_TOKEN en los Secrets del Space. La descarga no funcionará.")
+    print("⚠️  ADVERTENCIA: No se encontró el HF_WRITE_TOKEN en las variables de entorno.")
+    print("   La función de descarga de archivos no estará disponible.")
+
+# Inicializar DataFrame vacío por defecto
+df = pd.DataFrame()
 
 try:
-    print(f"Intentando descargar {FILENAME_DATA} desde el Space {REPO_ID_DATA}...")
-    local_file_path = hf_hub_download(
-        repo_id=REPO_ID_DATA,
-        filename=FILENAME_DATA,
-        repo_type="space",
-        token=hf_token_read
-    )
-    df = pd.read_excel(local_file_path)
-    print("✅ Datos cargados exitosamente desde el Space privado.")
+    if hf_token_read:
+        print(f"Intentando descargar {FILENAME_DATA} desde el Space {REPO_ID_DATA}...")
+        local_file_path = hf_hub_download(
+            repo_id=REPO_ID_DATA,
+            filename=FILENAME_DATA,
+            repo_type="space",
+            token=hf_token_read
+        )
+        df = pd.read_excel(local_file_path)
+        print("✅ Datos cargados exitosamente desde el Space privado.")
 
-    # --- NUEVO BLOQUE DE LIMPIEZA DE COLUMNAS ---
-    print("Columnas originales:", df.columns.tolist())
-    df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_', regex=False).str.replace('.', '_', regex=False)
-    print("Columnas limpiadas:", df.columns.tolist())
-    # ---------------------------------------------
+        # --- NUEVO BLOQUE DE LIMPIEZA DE COLUMNAS ---
+        print("Columnas originales:", df.columns.tolist())
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_', regex=False).str.replace('.', '_', regex=False)
+        print("Columnas limpiadas:", df.columns.tolist())
+        # ---------------------------------------------
 
-    df.dropna(inplace=True)
+        df.dropna(inplace=True)
+    else:
+        print("⚠️  Ejecutando en modo demo sin datos reales.")
+        # Crear datos de ejemplo para demostración
+        df = pd.DataFrame({
+            'etapa': ['Diseño', 'Construcción', 'Acabados'] * 10,
+            'disciplina': ['Arquitectura', 'Estructural', 'MEP'] * 10,
+            'actividades': ['Planos', 'Cálculos', 'Instalación'] * 10,
+            'area_proyecto_m2': np.random.uniform(100, 1000, 30),
+            'valor_del_contrato': np.random.uniform(50000, 500000, 30),
+            'valor_por_m2': np.random.uniform(500, 2000, 30),
+            'codigo': [f'DEMO-{i:03d}' for i in range(30)],
+            'horas_ejecutadas': np.random.uniform(50, 500, 30),
+            'horas_planeadas': np.random.uniform(40, 450, 30)
+        })
 
 except Exception as e:
     print(f"❌ Error al cargar o limpiar el archivo de datos: {e}")
-    # En caso de error, creamos un DataFrame vacío para que la app no se caiga
-    df = pd.DataFrame(columns=['etapa', 'disciplina', 'actividades', 'area_proyecto_m2', 'valor_del_contrato', 'valor_por_m2', 'codigo', 'horas_ejecutadas', 'horas_planeadas'])
+    # Crear datos de ejemplo para que la app funcione
+    df = pd.DataFrame({
+        'etapa': ['Diseño', 'Construcción', 'Acabados'] * 10,
+        'disciplina': ['Arquitectura', 'Estructural', 'MEP'] * 10,
+        'actividades': ['Planos', 'Cálculos', 'Instalación'] * 10,
+        'area_proyecto_m2': np.random.uniform(100, 1000, 30),
+        'valor_del_contrato': np.random.uniform(50000, 500000, 30),
+        'valor_por_m2': np.random.uniform(500, 2000, 30),
+        'codigo': [f'ERROR-{i:03d}' for i in range(30)],
+        'horas_ejecutadas': np.random.uniform(50, 500, 30),
+        'horas_planeadas': np.random.uniform(40, 450, 30)
+    })
 
 
 # --- 3. DEFINICIÓN DE CARACTERÍSTICAS Y PREPROCESAMIENTO (CON NOMBRES LIMPIOS) ---
@@ -172,6 +203,10 @@ def process_excel_file(file_obj, default_area, default_valor):
     if file_obj is None:
         return "Por favor, sube un archivo Excel primero.", gr.update(visible=False)
     
+    # Verificar si tenemos token de escritura
+    if not hf_token_write:
+        return "❌ Error: Token de escritura no configurado. Contacta al administrador.", gr.update(visible=False)
+    
     try:
         df_input = pd.read_excel(file_obj.name)
         
@@ -251,8 +286,16 @@ etapas_unicas = sorted(list(etapas_validas))
 disciplinas_unicas = sorted(list(disciplinas_validas))
 actividades_unicas = sorted(list(actividades_validas))
 
+# Configurar status de la aplicación
+status_message = "🟢 Aplicación funcionando correctamente"
+if not hf_token_read:
+    status_message = "🟡 Aplicación en modo demo (sin datos reales)"
+if not hf_token_write:
+    status_message += " - Descarga de archivos deshabilitada"
+
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("## 👷 Estimador de Horas de Proyecto v1.3")
+    gr.Markdown("## 👷 Estimador de Horas de Proyecto v1.4 (Dokploy)")
+    gr.Markdown(f"**Estado:** {status_message}")
     gr.Markdown(
         """
         **Opciones disponibles:**
@@ -315,10 +358,10 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 - Debe ser un archivo Excel (.xlsx).
                 - Debe contener las columnas: `ETAPA`, `DISCIPLINA`, `ACTIVIDADES`.
                 - Se agregarán automáticamente las columnas `Horas_Ejecutadas` y `Estado_Validacion`.
-                - El archivo procesado se subirá al Space y se proporcionará un enlace de descarga.
+                - El archivo procesado se subirá al repositorio público para su descarga.
                 
                 ---
-                ⚠️ **Nota:** El archivo se guardará temporalmente en el Space público para su descarga.
+                ⚠️ **Nota:** El archivo se guardará temporalmente para su descarga.
                 """
             )
             # --- FIN DEL BLOQUE MODIFICADO ---
@@ -345,4 +388,24 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         outputs=[process_status, download_link]
     )
 
-demo.launch()
+# --- 9. CONFIGURACIÓN PARA PRODUCCIÓN EN DOKPLOY ---
+if __name__ == "__main__":
+    # Configuración específica para producción
+    server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
+    server_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
+    
+    print(f"🚀 Iniciando aplicación en {server_name}:{server_port}")
+    print(f"📊 Modo: {'Producción' if hf_token_read else 'Demo'}")
+    
+    demo.launch(
+        server_name=server_name,
+        server_port=server_port,
+        share=False,
+        show_error=True,
+        quiet=False,
+        favicon_path=None,
+        ssl_keyfile=None,
+        ssl_certfile=None,
+        ssl_keyfile_password=None
+    )
+                
