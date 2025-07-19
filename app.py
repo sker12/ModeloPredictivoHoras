@@ -28,8 +28,8 @@ warnings.filterwarnings('ignore')
 # --- 2. CARGA Y PREPARACIÓN DE DATOS ---
 
 # Obtener los tokens guardados en los "Secrets" del Space o variables de entorno
-hf_token_read = os.getenv("HF_TOKEN")      # Token para lectura de datos
-hf_token_write = os.getenv("HF_WRITE_TOKEN") # Token para escritura de resultados
+hf_token_read = os.getenv("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")      # Token para lectura de datos
+hf_token_write = os.getenv("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") # Token para escritura de resultados
 
 # ⬇️⬇️⬇️ ¡IMPORTANTE! REEMPLAZA ESTOS VALORES POR LOS TUYOS ⬇️⬇️⬇️
 # El ID del Space PRIVADO que contiene el archivo de datos
