@@ -400,7 +400,7 @@ if __name__ == "__main__":
     demo.launch(
         server_name=server_name,
         server_port=server_port,
-        share=False,
+        share=True,
         show_error=True,
         quiet=False,
         favicon_path=None,
